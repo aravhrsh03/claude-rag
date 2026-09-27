@@ -1,0 +1,180 @@
+# Prodapt AI Operations Center — Capstone Implementation
+
+Multi-framework agentic AI system for a fictional telecom provider, built per
+`Agentic AI Project .html`: a **LangGraph** supervisor routes customer/staff
+inquiries to specialist workers powered by **LlamaIndex** (document RAG +
+semantic SQL), **Google ADK** (A2A microservices with SQL-backed tools), and
+**CrewAI** (final customer-facing communications), surfaced through a
+**Streamlit** UI with a full agent execution trace.
+
+## Project layout
+
+```
+projectfiles/
+├── Agentic AI Project .html      (spec, provided)
+├── data/
+│   ├── documents/*.txt           (6 policy files, provided)
+│   ├── telecom_ops.db            (created by init_db.py)
+│   └── vector_index/             (created on first PolicyRAG query)
+├── sql/01_schema.sql             (provided)
+├── sql/02_seed_data.sql          (provided)
+├── config.py                     (shared paths/env config)
+├── init_db.py                    (builds telecom_ops.db from the SQL scripts)
+├── common/db.py                  (shared SQLite helpers - no in-memory data)
+├── llamaindex_rag/
+│   ├── document_rag.py           (PolicyRAG: VectorStoreIndex over TXT docs)
+│   └── sql_semantic_search.py    (NetworkAnalytics: ObjectIndex + SQL query engine)
+├── adk-services/
+│   ├── network_diagnostics/agent.py   (ADK A2A service, port 8001)
+│   └── billing_resolution/agent.py    (ADK A2A service, port 8002)
+├── orchestration/
+│   ├── state.py                  (LangGraph AgentState)
+│   ├── graph.py                  (supervisor + worker nodes + compiled graph)
+│   ├── adk_remote_client.py      (RemoteA2aAgent wrapper for LangGraph)
+│   └── crew_nodes.py             (CrewAI customer communications crew)
+├── ui/app.py                     (Streamlit app)
+├── requirements.txt
+└── .env.example
+```
+
+## Setup
+
+**Requires Python 3.10+.** A `.venv/` with every dependency already installed and
+verified (see Verification below) is included in this folder — just activate it:
+
+```bash
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
+```
+
+Setting up from scratch elsewhere:
+
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate      macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Then, either way:
+
+```bash
+copy .env.example .env      # Windows (or: cp .env.example .env)
+# edit .env and set OPENAI_API_KEY
+```
+
+By default, ADK agents also call OpenAI (via LiteLLM) so **only
+`OPENAI_API_KEY` is required**. To use Gemini for the ADK agents instead, set
+`ADK_MODEL=gemini-2.0-flash` and `GOOGLE_API_KEY` in `.env`.
+
+## Run order
+
+All commands are from the `projectfiles/` project root.
+
+1. **Build the database** (creates `data/telecom_ops.db` from the provided SQL scripts):
+   ```bash
+   python init_db.py
+   ```
+   Expect `network_towers: 10 rows` and one flagged duplicate charge for `CUST-10002`.
+
+2. **Start both ADK A2A services**, each in its own terminal:
+   ```bash
+   # Terminal 1
+   python adk-services/network_diagnostics/agent.py
+   # Terminal 2
+   python adk-services/billing_resolution/agent.py
+   ```
+   Verify the agent cards are up:
+   `http://localhost:8001/.well-known/agent-card.json`
+   `http://localhost:8002/.well-known/agent-card.json`
+
+3. **Start the Streamlit UI** in a third terminal:
+   ```bash
+   streamlit run ui/app.py
+   ```
+   The first PolicyRAG query will build and persist the vector index to
+   `data/vector_index/` (subsequent runs load it instantly). The sidebar
+   shows live status for the database, vector index, and both ADK services.
+
+## Demo scenarios (from the spec, section 9)
+
+| # | Try this query | Expected routing |
+|---|---|---|
+| 1 | "What is Prodapt's roaming policy for Western Europe?" | PolicyRAG → CustomerCommsCrew |
+| 2 | "Which region had the most CRITICAL network outages?" | NetworkAnalytics → CustomerCommsCrew (answer: Midwest) |
+| 3 | "My 5G keeps dropping in Austin near tower TX-512. Please diagnose." | NetworkDiagnosticsADK → CustomerCommsCrew |
+| 4 | "Customer CUST-10002 was charged twice for Unlimited Plus. Investigate and apply credit." | BillingResolutionADK → CustomerCommsCrew (credit is PENDING_APPROVAL, $65.99 > $50 limit, balance stays $131.98) |
+| 5 | "We had a 6-hour outage in the Midwest. Am I eligible for an SLA credit and what does policy say?" | NetworkAnalytics → PolicyRAG → CustomerCommsCrew |
+
+More practice queries (with expected answers, useful while developing/demoing)
+are in section 9.7 of `Agentic AI Project .html`.
+
+## Verification
+
+Everything below was actually run (not just written) against the real
+libraries in `.venv`, without spending any LLM API calls:
+
+- `init_db.py` builds the database; every scenario anchor from the spec
+  (CUST-10002 balance/duplicate, TX-512/FL-090 latest-sample metrics, Midwest
+  CRITICAL outage counts, packet-loss ranking) matches exactly.
+- All three Billing Resolution tools (`lookup_billing_account`,
+  `check_duplicate_charges`, `apply_billing_credit`) were called directly
+  against the live database: the $50 auto-approval boundary (12.00 → APPLIED,
+  50.00 → APPLIED, 65.99 → PENDING_APPROVAL) and the duplicate-detection query
+  both match the spec's worked examples exactly. The DB was reset afterward.
+- All three Network Diagnostics tools were called directly: TX-512 reproduces
+  Scenario 3 exactly (OPERATIONAL, 3.8% packet loss, INC-8841 open); FL-090
+  correctly reads OFFLINE/100% loss on the latest sample only.
+- Both ADK services start for real, publish correct agent cards (with full
+  tool schemas) at `/.well-known/agent-card.json` on ports 8001/8002, and
+  `to_a2a` / `RemoteA2aAgent` construct without error against the installed
+  `google-adk` version.
+- The LlamaIndex document RAG index and the semantic-SQL `ObjectIndex` both
+  build successfully (embedding model downloads and runs locally).
+- The LangGraph graph compiles with all six expected nodes; the CrewAI crew
+  constructs with both agents and both tasks.
+- The Streamlit app was run through Streamlit's official `AppTest` harness:
+  sidebar status detection, the Submit → response → Agent Execution Trace
+  flow, the empty-trace message, and the `st.error` path were all exercised
+  and render exactly as specified in section 6.8 — this caught and fixed one
+  real bug (a bare ternary `st.success(...) if x else st.error(...)`
+  statement that Streamlit's "magic" display feature can't parse; now plain
+  `if/else`).
+
+What was **not** run, since it spends real API credits you'd need to
+provide: an actual end-to-end query through the LangGraph supervisor (LLM
+routing decision → LlamaIndex/ADK/CrewAI LLM calls → final answer). Everything
+that call chain depends on has been verified individually above.
+
+## Design notes / how this maps to the spec's build instructions (section 6)
+
+- **No in-memory dictionaries**: every ADK tool (`adk-services/*/agent.py`)
+  opens a fresh SQLite connection via `common/db.py` per call; nothing about
+  towers, incidents, balances, or credits is cached in Python.
+- **LlamaIndex used only for retrieval**: `document_rag.py` and
+  `sql_semantic_search.py` expose plain functions via `as_query_engine()` /
+  `SQLTableRetrieverQueryEngine` — no LlamaIndex agents/workflows.
+- **Billing credit rule** (`apply_billing_credit` in
+  `adk-services/billing_resolution/agent.py`): amount ≤ $50.00 → `APPLIED`,
+  balance reduced; amount > $50.00 → `PENDING_APPROVAL`, balance unchanged —
+  matches `billing_disputes_policy.txt` and the schema comments exactly.
+- **Diagnostics use the latest sample only**: all tower_performance lookups
+  filter to `MAX(recorded_at)` per tower, never an average.
+- **Supervisor guarantees CustomerCommsCrew runs last**: `graph.py`'s
+  `supervisor_node` uses an LLM with structured output for routing, but also
+  hard-enforces (in code) that FINISH is never chosen until CustomerCommsCrew
+  has already run, and caps total worker hops to prevent loops.
+- **RemoteA2aAgent pattern**: `adk_remote_client.py` wraps each remote ADK
+  service in a lightweight local proxy `Agent` (whose only sub_agent is the
+  `RemoteA2aAgent`) and drives it with an ADK `Runner`; if a service's port
+  isn't reachable, LangGraph gets back a clear message naming the exact
+  command to start it, instead of an exception.
+
+## Troubleshooting
+
+- **"Database: Not found" in the sidebar** → run `python init_db.py` from the project root.
+- **ADK service shows "Not running"** → start it in its own terminal (see step 2); check that nothing else is bound to port 8001/8002.
+- **PolicyRAG/NetworkAnalytics errors mentioning API keys** → confirm `OPENAI_API_KEY` is set in `.env` and the process was started after `.env` was saved.
+- **Rebuilding the vector index** after editing a policy doc → delete `data/vector_index/` and resubmit a policy query.
+- **Resetting demo data** (e.g. after applying credits during a walkthrough) → re-run `python init_db.py`; it drops and recreates every table.
