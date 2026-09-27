@@ -10,7 +10,7 @@ so this is the exact, minimal path from a fresh clone to a running demo.
 | Path | In the repo? | Why |
 |---|---|---|
 | All source code (`*.py`), `sql/`, `data/documents/*.txt`, `requirements.txt`, docs | ✅ Yes | This is the actual project |
-| `Agentic AI Project .html` | ✅ Yes | The provided spec, kept for reference |
+| `capstone-project-specification.html` + `Agentic AI Project .html` | ✅ Yes | The provided spec — kept under both the exact filename the spec's own directory tree expects, and its original given filename, for reference |
 | `.venv/` | ❌ No (`.gitignore`) | ~2 GB of installed packages (torch, transformers, etc.) — never belongs in git; you rebuild it in one command below |
 | `.env` | ❌ No (`.gitignore`) | Holds your personal `OPENAI_API_KEY` — never commit a real secret |
 | `data/telecom_ops.db` | ❌ No (`.gitignore`) | Generated from `sql/*.sql` by `init_db.py` — a binary DB file doesn't belong in git when it's one command to regenerate |

@@ -1,7 +1,8 @@
 # Prodapt AI Operations Center — Capstone Implementation
 
 Multi-framework agentic AI system for a fictional telecom provider, built per
-`Agentic AI Project .html`: a **LangGraph** supervisor routes customer/staff
+`capstone-project-specification.html` (also kept under its original given
+filename, `Agentic AI Project .html`): a **LangGraph** supervisor routes customer/staff
 inquiries to specialist workers powered by **LlamaIndex** (document RAG +
 semantic SQL), **Google ADK** (A2A microservices with SQL-backed tools), and
 **CrewAI** (final customer-facing communications), surfaced through a
@@ -10,8 +11,9 @@ semantic SQL), **Google ADK** (A2A microservices with SQL-backed tools), and
 ## Project layout
 
 ```
-projectfiles/
-├── Agentic AI Project .html      (spec, provided)
+capstone-project/
+├── capstone-project-specification.html  (spec, provided)
+├── Agentic AI Project .html      (same spec, original given filename)
 ├── data/
 │   ├── documents/*.txt           (6 policy files, provided)
 │   ├── telecom_ops.db            (created by init_db.py)
@@ -70,7 +72,7 @@ By default, ADK agents also call OpenAI (via LiteLLM) so **only
 
 ## Run order
 
-All commands are from the `projectfiles/` project root.
+All commands are from the `capstone-project/` project root.
 
 1. **Build the database** (creates `data/telecom_ops.db` from the provided SQL scripts):
    ```bash
@@ -108,7 +110,7 @@ All commands are from the `projectfiles/` project root.
 | 5 | "We had a 6-hour outage in the Midwest. Am I eligible for an SLA credit and what does policy say?" | NetworkAnalytics → PolicyRAG → CustomerCommsCrew |
 
 More practice queries (with expected answers, useful while developing/demoing)
-are in section 9.7 of `Agentic AI Project .html`.
+are in section 9.7 of `capstone-project-specification.html`.
 
 ## Verification
 
