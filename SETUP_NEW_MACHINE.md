@@ -12,7 +12,7 @@ so this is the exact, minimal path from a fresh clone to a running demo.
 | All source code (`*.py`), `sql/`, `data/documents/*.txt`, `requirements.txt`, docs | ✅ Yes | This is the actual project |
 | `capstone-project-specification.html` + `Agentic AI Project .html` | ✅ Yes | The provided spec — kept under both the exact filename the spec's own directory tree expects, and its original given filename, for reference |
 | `.venv/` | ❌ No (`.gitignore`) | ~2 GB of installed packages (torch, transformers, etc.) — never belongs in git; you rebuild it in one command below |
-| `.env` | ❌ No (`.gitignore`) | Holds your personal `OPENAI_API_KEY` — never commit a real secret |
+| `.env` | ❌ No (`.gitignore`) | Holds your personal `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`) — never commit a real secret |
 | `data/telecom_ops.db` | ❌ No (`.gitignore`) | Generated from `sql/*.sql` by `init_db.py` — a binary DB file doesn't belong in git when it's one command to regenerate |
 | `data/vector_index/` | ❌ No (`.gitignore`) | Generated automatically the first time you ask a policy question — also just a rebuildable cache |
 
@@ -25,15 +25,18 @@ or your own secret. Follow the steps below in order.
 
 - **Python 3.10 or newer** (this codebase was built and verified on 3.12).
   Check with `python --version`.
-- **An OpenAI API key** from https://platform.openai.com/api-keys.
+- **An Anthropic (Claude) API key** from
+  https://console.anthropic.com/settings/keys — this project defaults to
+  Claude. (An OpenAI key works too if you set `LLM_PROVIDER=openai` — see
+  step 5.)
 - Windows, macOS, or Linux all work — the commands below note where they
   differ.
 
 ### 2. Clone and enter the project
 
 ```bash
-git clone https://github.com/aravhrsh03/rag-capstone.git
-cd rag-capstone
+git clone https://github.com/aravhrsh03/claude-rag.git
+cd claude-rag
 ```
 
 ### 3. Create and activate a virtual environment
@@ -88,12 +91,14 @@ copy .env.example .env      # Windows
 Open `.env` and set:
 
 ```
-OPENAI_API_KEY=sk-your-real-key-here
+ANTHROPIC_API_KEY=sk-ant-your-real-key-here
 ```
 
-Everything else in `.env.example` has a working default — leave it unless
-you specifically want to switch the ADK agents to Gemini (see
-`DEPENDENCIES_AND_NEXT_STEPS.md` §5).
+`LLM_PROVIDER=anthropic` is already the default in `.env.example`, so this
+one key is all you need — it drives the LangGraph supervisor, LlamaIndex,
+CrewAI, and (by default) the ADK agents too. To run the whole stack on
+OpenAI instead, set `LLM_PROVIDER=openai` and `OPENAI_API_KEY=...`; to run
+just the ADK agents on Gemini, see `DEPENDENCIES_AND_NEXT_STEPS.md` §5.
 
 ### 6. Build the database
 

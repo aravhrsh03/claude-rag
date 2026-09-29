@@ -23,9 +23,8 @@ from llama_index.core import (
     load_index_from_storage,
 )
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.openai import OpenAI
 
-from config import DOCUMENTS_DIR, EMBEDDING_MODEL, OPENAI_API_KEY, OPENAI_MODEL, VECTOR_INDEX_DIR
+from config import DOCUMENTS_DIR, EMBEDDING_MODEL, VECTOR_INDEX_DIR, get_llamaindex_llm
 
 _index = None
 _query_engine = None
@@ -35,7 +34,8 @@ _settings_configured = False
 
 
 def _configure_settings() -> None:
-    """Point LlamaIndex's global Settings at our local embedder + OpenAI LLM.
+    """Point LlamaIndex's global Settings at our local embedder + the
+    configured LLM provider (Anthropic or OpenAI - see config.LLM_PROVIDER).
 
     Note: Settings.embed_model has a lazy-resolving getter that, if read
     before anything is assigned, tries to default to an OpenAI embedding
@@ -46,7 +46,7 @@ def _configure_settings() -> None:
     if not _settings_configured:
         Settings.embed_model = HuggingFaceEmbedding(model_name=EMBEDDING_MODEL)
         _settings_configured = True
-    Settings.llm = OpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=0.1)
+    Settings.llm = get_llamaindex_llm()
 
 
 def _build_or_load_index() -> VectorStoreIndex:

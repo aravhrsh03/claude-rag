@@ -8,6 +8,10 @@ semantic SQL), **Google ADK** (A2A microservices with SQL-backed tools), and
 **CrewAI** (final customer-facing communications), surfaced through a
 **Streamlit** UI with a full agent execution trace.
 
+> Runs on **Anthropic Claude** by default (one `LLM_PROVIDER` switch in
+> `.env` can point the whole stack at OpenAI instead) — see `HOW_TO_RUN.md`
+> for the exact setup.
+
 ## Project layout
 
 ```
@@ -63,12 +67,16 @@ Then, either way:
 
 ```bash
 copy .env.example .env      # Windows (or: cp .env.example .env)
-# edit .env and set OPENAI_API_KEY
+# edit .env and set ANTHROPIC_API_KEY
 ```
 
-By default, ADK agents also call OpenAI (via LiteLLM) so **only
-`OPENAI_API_KEY` is required**. To use Gemini for the ADK agents instead, set
-`ADK_MODEL=gemini-2.0-flash` and `GOOGLE_API_KEY` in `.env`.
+`LLM_PROVIDER` in `.env` is the one switch that drives every LLM call in the
+project — the LangGraph supervisor, LlamaIndex's answer synthesis, CrewAI,
+and (by default) the ADK agents too. It defaults to `anthropic`, so **only
+`ANTHROPIC_API_KEY` is required** out of the box. Set `LLM_PROVIDER=openai`
+and `OPENAI_API_KEY` to run the whole stack on OpenAI instead, or leave
+`LLM_PROVIDER` as-is and set `ADK_MODEL=gemini-2.0-flash` + `GOOGLE_API_KEY`
+to run just the ADK agents on Gemini.
 
 ## Run order
 
@@ -177,6 +185,6 @@ that call chain depends on has been verified individually above.
 
 - **"Database: Not found" in the sidebar** → run `python init_db.py` from the project root.
 - **ADK service shows "Not running"** → start it in its own terminal (see step 2); check that nothing else is bound to port 8001/8002.
-- **PolicyRAG/NetworkAnalytics errors mentioning API keys** → confirm `OPENAI_API_KEY` is set in `.env` and the process was started after `.env` was saved.
+- **PolicyRAG/NetworkAnalytics errors mentioning API keys** → confirm the key matching your `LLM_PROVIDER` (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`) is set in `.env` and the process was started after `.env` was saved.
 - **Rebuilding the vector index** after editing a policy doc → delete `data/vector_index/` and resubmit a policy query.
 - **Resetting demo data** (e.g. after applying credits during a walkthrough) → re-run `python init_db.py`; it drops and recreates every table.

@@ -29,17 +29,32 @@ SEED_SQL_PATH = SQL_DIR / "02_seed_data.sql"
 # --------------------------------------------------------------------------
 # LLM / embedding configuration (LlamaIndex + CrewAI + LangGraph supervisor)
 # --------------------------------------------------------------------------
+# LLM_PROVIDER is the one switch that drives every LLM call in the project
+# (supervisor routing, LlamaIndex answer synthesis, CrewAI, and - unless
+# overridden - the ADK agents too): "anthropic" or "openai".
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 # --------------------------------------------------------------------------
 # Google ADK configuration
 # --------------------------------------------------------------------------
-# Default routes ADK agents through OpenAI (via LiteLLM) so the project runs
-# end-to-end with only OPENAI_API_KEY set. Set ADK_MODEL=gemini-2.0-flash and
-# GOOGLE_API_KEY to use Gemini instead.
-ADK_MODEL = os.getenv("ADK_MODEL", "openai/gpt-4o-mini")
+# If ADK_MODEL isn't set explicitly, it defaults to match LLM_PROVIDER, so
+# one env var switches the whole stack. Set ADK_MODEL=gemini-2.0-flash (plus
+# GOOGLE_API_KEY) to use Gemini for just the ADK agents regardless of
+# LLM_PROVIDER.
+_DEFAULT_ADK_MODEL = (
+    f"anthropic/{ANTHROPIC_MODEL}" if LLM_PROVIDER == "anthropic" else f"openai/{OPENAI_MODEL}"
+)
+# `or` (not a plain os.getenv default) so an empty ADK_MODEL= line in .env
+# still falls through to the LLM_PROVIDER-matched default, not "".
+ADK_MODEL = os.getenv("ADK_MODEL") or _DEFAULT_ADK_MODEL
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
 NETWORK_DIAGNOSTICS_PORT = int(os.getenv("NETWORK_DIAGNOSTICS_PORT", "8001"))
@@ -76,3 +91,38 @@ def get_adk_model():
 
         return LiteLlm(model=model_name)
     return model_name
+
+
+def get_chat_llm(temperature: float = 0.0):
+    """
+    LangChain chat model for the LangGraph supervisor's structured-output
+    routing decision (ChatOpenAI/ChatAnthropic both support
+    .with_structured_output(...)).
+    """
+    if LLM_PROVIDER == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+
+        return ChatAnthropic(model=ANTHROPIC_MODEL, api_key=ANTHROPIC_API_KEY, temperature=temperature)
+
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=temperature)
+
+
+def get_llamaindex_llm(temperature: float = 0.1):
+    """LlamaIndex LLM used for RAG/semantic-SQL answer synthesis (Settings.llm)."""
+    if LLM_PROVIDER == "anthropic":
+        from llama_index.llms.anthropic import Anthropic
+
+        return Anthropic(model=ANTHROPIC_MODEL, api_key=ANTHROPIC_API_KEY, temperature=temperature)
+
+    from llama_index.llms.openai import OpenAI
+
+    return OpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=temperature)
+
+
+def get_crewai_model_string() -> str:
+    """LiteLLM-style 'provider/model' string for CrewAI's Agent(llm=...)."""
+    if LLM_PROVIDER == "anthropic":
+        return f"anthropic/{ANTHROPIC_MODEL}"
+    return f"openai/{OPENAI_MODEL}"

@@ -25,11 +25,10 @@ from typing import Literal
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
 
-from config import OPENAI_API_KEY, OPENAI_MODEL
+from config import get_chat_llm
 from llamaindex_rag.document_rag import answer_policy_question
 from llamaindex_rag.sql_semantic_search import answer_network_analytics_question
 from orchestration.adk_remote_client import diagnose_network_issue, resolve_billing_issue
@@ -103,7 +102,7 @@ _supervisor_llm = None
 def _get_supervisor_llm():
     global _supervisor_llm
     if _supervisor_llm is None:
-        base_llm = ChatOpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=0)
+        base_llm = get_chat_llm(temperature=0)
         _supervisor_llm = base_llm.with_structured_output(RouteDecision)
     return _supervisor_llm
 

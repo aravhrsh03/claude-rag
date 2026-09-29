@@ -16,15 +16,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from crewai import Agent, Crew, Process, Task
 
-from config import OPENAI_API_KEY, OPENAI_MODEL
+from config import ANTHROPIC_API_KEY, OPENAI_API_KEY, get_crewai_model_string
 
-# CrewAI (via LiteLLM) picks up OPENAI_API_KEY from the environment; config.py
-# already loads .env, we just make sure it's set before crewai touches litellm.
+# CrewAI (via LiteLLM) picks up provider API keys from the environment;
+# config.py already loads .env, we just make sure whichever one is set is
+# visible before crewai touches litellm.
 import os
 
-os.environ.setdefault("OPENAI_API_KEY", OPENAI_API_KEY)
+if OPENAI_API_KEY:
+    os.environ.setdefault("OPENAI_API_KEY", OPENAI_API_KEY)
+if ANTHROPIC_API_KEY:
+    os.environ.setdefault("ANTHROPIC_API_KEY", ANTHROPIC_API_KEY)
 
-_LLM_MODEL = f"openai/{OPENAI_MODEL}"
+_LLM_MODEL = get_crewai_model_string()
 
 
 def _build_crew(user_query: str, agent_context: str) -> Crew:

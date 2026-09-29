@@ -13,13 +13,16 @@ project to a machine that doesn't have it.
 
 ## 1. One-time setup (do this once)
 
-### 1.1 Get an OpenAI API key ready
+### 1.1 Get an API key ready
 
-You need an OpenAI API key (starts with `sk-...`) from
-https://platform.openai.com/api-keys. This project's LLM calls — the
-LangGraph supervisor's routing decisions, LlamaIndex's answer synthesis, the
-CrewAI writer/reviewer, and (by default) the ADK agents' tool-calling — all
-go through this one key.
+By default this project runs entirely on **Anthropic (Claude)**. Get a key
+(starts with `sk-ant-...`) from https://console.anthropic.com/settings/keys.
+This project's LLM calls — the LangGraph supervisor's routing decisions,
+LlamaIndex's answer synthesis, the CrewAI writer/reviewer, and (by default)
+the ADK agents' tool-calling — all go through this one key.
+
+(If you'd rather run on OpenAI instead, see the `LLM_PROVIDER` note in step
+1.2 — everything below still applies, just with an OpenAI key.)
 
 ### 1.2 Create your `.env` file
 
@@ -32,12 +35,14 @@ copy .env.example .env
 Open `.env` in any text editor and fill in:
 
 ```
-OPENAI_API_KEY=sk-your-real-key-here
+ANTHROPIC_API_KEY=sk-ant-your-real-key-here
 ```
 
-Everything else in `.env.example` has a working default — leave it as-is
-unless you specifically want to switch the ADK agents to Gemini (see
-`DEPENDENCIES_AND_NEXT_STEPS.md` for how).
+Everything else in `.env.example` has a working default — leave it as-is.
+`LLM_PROVIDER=anthropic` is already the default, so this one key is all you
+need. To run on OpenAI instead, set `LLM_PROVIDER=openai` and
+`OPENAI_API_KEY=...`; to switch just the ADK agents to Gemini, see
+`DEPENDENCIES_AND_NEXT_STEPS.md`.
 
 **Never commit `.env` to git or share it** — it holds your real key.
 `.gitignore` already excludes it.

@@ -106,8 +106,10 @@ it runs.
 
 1. `_configure_settings()` points LlamaIndex's global `Settings` at a local
    `HuggingFaceEmbedding` (`sentence-transformers/all-MiniLM-L6-v2`, runs on
-   your machine, no API key needed) for embeddings, and `OpenAI` (via
-   `llama-index-llms-openai`) for answer synthesis.
+   your machine, no API key needed) for embeddings, and, for answer
+   synthesis, whichever LLM `config.get_llamaindex_llm()` resolves to based
+   on `LLM_PROVIDER` — `llama_index.llms.anthropic.Anthropic` by default, or
+   `llama_index.llms.openai.OpenAI` if `LLM_PROVIDER=openai`.
 
    > **Bug we found and fixed during testing:** `Settings.embed_model` has a
    > lazy-resolving *getter* — if you read it before assigning anything, it
@@ -245,8 +247,11 @@ than replacing it — the idiomatic LangGraph pattern for a supervisor loop.
 
 ### 7.2 `graph.py` — the supervisor and worker nodes
 
-**The supervisor** (`supervisor_node`) is a `ChatOpenAI` instance bound to a
-Pydantic `RouteDecision` schema via `.with_structured_output(...)`, so the
+**The supervisor** (`supervisor_node`) is a chat model from
+`config.get_chat_llm()` — `ChatAnthropic` by default, or `ChatOpenAI` if
+`LLM_PROVIDER=openai` — bound to a Pydantic `RouteDecision` schema via
+`.with_structured_output(...)` (both providers support this via tool
+calling), so the
 LLM's output is always a valid `{next: <one of 6 literal values>, reasoning:
 str}` — no parsing brittle free text. Its system prompt (embedded in
 `_SUPERVISOR_SYSTEM_PROMPT`) describes each worker's job, the keyword
@@ -330,7 +335,9 @@ different agent frameworks together over HTTP:
 
 ### 7.4 `crew_nodes.py` — the CrewAI customer communications crew
 
-Two `crewai.Agent`s, both using `openai/{OPENAI_MODEL}` as their LLM:
+Two `crewai.Agent`s, both using `config.get_crewai_model_string()` as their
+LLM — a LiteLLM-style `"anthropic/{ANTHROPIC_MODEL}"` string by default, or
+`"openai/{OPENAI_MODEL}"` if `LLM_PROVIDER=openai`:
 
 - **Communications Specialist** — drafts a customer-facing response using
   the original query + the full `agent_context` (every upstream worker's

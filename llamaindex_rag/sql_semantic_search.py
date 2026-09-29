@@ -19,10 +19,9 @@ from llama_index.core import SQLDatabase, Settings, VectorStoreIndex
 from llama_index.core.objects import ObjectIndex, SQLTableNodeMapping, SQLTableSchema
 from llama_index.core.query_engine import SQLTableRetrieverQueryEngine
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.openai import OpenAI
 from sqlalchemy import create_engine
 
-from config import DB_PATH, EMBEDDING_MODEL, OPENAI_API_KEY, OPENAI_MODEL
+from config import DB_PATH, EMBEDDING_MODEL, get_llamaindex_llm
 
 # Tables exposed to semantic SQL retrieval, per section 5.1/5.3 of the spec.
 # open_incidents, billing_* tables are intentionally excluded here - they are
@@ -83,7 +82,7 @@ def _configure_settings() -> None:
     if not _settings_configured:
         Settings.embed_model = HuggingFaceEmbedding(model_name=EMBEDDING_MODEL)
         _settings_configured = True
-    Settings.llm = OpenAI(model=OPENAI_MODEL, api_key=OPENAI_API_KEY, temperature=0.1)
+    Settings.llm = get_llamaindex_llm()
 
 
 def _build_query_engine() -> SQLTableRetrieverQueryEngine:

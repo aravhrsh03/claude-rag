@@ -22,17 +22,19 @@ credits.
 
 This is the complete list — nothing else is required:
 
-1. **Provide a real `OPENAI_API_KEY`.** Copy `.env.example` to `.env` and
+1. **Provide a real `ANTHROPIC_API_KEY`.** Copy `.env.example` to `.env` and
    fill it in. Every LLM call in this project — the LangGraph supervisor,
    LlamaIndex's answer synthesis, CrewAI, and (by default) the ADK agents'
-   own tool-calling — goes through this one key. Without it, every worker
-   that needs an LLM will return a clear error string rather than crash, but
-   nothing will actually answer.
+   own tool-calling — goes through this one key by default (`LLM_PROVIDER=
+   anthropic`). Without it, every worker that needs an LLM will return a
+   clear error string rather than crash, but nothing will actually answer.
 2. **Start the three processes** (two ADK services + Streamlit) in three
    terminals — see `HOW_TO_RUN.md` for exact commands.
-3. **(Optional)** If you'd rather run the ADK agents on Gemini instead of
-   OpenAI, set `ADK_MODEL=gemini-2.0-flash` and `GOOGLE_API_KEY=...` in
-   `.env` (see §5 below for exactly how this switch works).
+3. **(Optional)** To run the whole stack on OpenAI instead of Anthropic, set
+   `LLM_PROVIDER=openai` and `OPENAI_API_KEY=...` in `.env`. To run just the
+   ADK agents on Gemini regardless of `LLM_PROVIDER`, set
+   `ADK_MODEL=gemini-2.0-flash` and `GOOGLE_API_KEY=...` (see §5 below for
+   exactly how this switch works).
 
 That's it. Everything else — the database, the index, the environment — is
 already built and checked.
@@ -45,14 +47,15 @@ From `requirements.txt`, grouped by role:
 |---|---|
 | `python-dotenv` | Loads `.env` into environment variables (`config.py`) |
 | `setuptools<81` | See §4 — pinned so `crewai`'s `pkg_resources` import keeps working |
-| `langgraph`, `langchain-core`, `langchain-openai` | The supervisor graph, message types, and the `ChatOpenAI` structured-output routing LLM |
+| `langgraph`, `langchain-core` | The supervisor graph and message types |
+| `langchain-anthropic`, `langchain-openai` | The supervisor's structured-output routing LLM — `config.get_chat_llm()` picks one based on `LLM_PROVIDER` |
 | `llama-index-core` | `VectorStoreIndex`, `SQLDatabase`, `ObjectIndex`, query engines |
-| `llama-index-llms-openai` | LlamaIndex's OpenAI LLM wrapper (answer synthesis + SQL generation) |
-| `llama-index-embeddings-huggingface`, `sentence-transformers`, `transformers` | The local embedding model (`all-MiniLM-L6-v2`) — no API key needed for embeddings |
+| `llama-index-llms-anthropic`, `llama-index-llms-openai` | LlamaIndex's LLM wrappers for answer synthesis + SQL generation — `config.get_llamaindex_llm()` picks one based on `LLM_PROVIDER` |
+| `llama-index-embeddings-huggingface`, `sentence-transformers`, `transformers` | The local embedding model (`all-MiniLM-L6-v2`) — no API key needed for embeddings, used regardless of `LLM_PROVIDER` |
 | `sqlalchemy` | LlamaIndex's `SQLDatabase` wrapper needs a SQLAlchemy engine over `telecom_ops.db` |
 | `google-adk[a2a]` | The ADK `Agent`, `to_a2a`, `RemoteA2aAgent`, `Runner`, session service — both ADK microservices and the LangGraph-side client |
-| `litellm` | Lets ADK agents call OpenAI models (via `LiteLlm(model="openai/...")`) instead of requiring Gemini/`GOOGLE_API_KEY` |
-| `crewai`, `crewai-tools` | The two-agent customer communications crew |
+| `litellm` | Lets ADK agents call Anthropic or OpenAI models (via `LiteLlm(model="anthropic/..."` or `"openai/..."`) instead of requiring Gemini/`GOOGLE_API_KEY` |
+| `crewai`, `crewai-tools` | The two-agent customer communications crew — its LLM string also follows `LLM_PROVIDER` via `config.get_crewai_model_string()` |
 | `streamlit` | The UI |
 | `httpx` | Health-checking the ADK services' agent-card URLs (used by both the UI sidebar and `adk_remote_client.py`) |
 
@@ -90,18 +93,39 @@ successful given how `crewai`'s dependency tree is currently shaped. If a
 future `crewai` release depends on `crewai-tools` more narrowly, or drops
 the `pkg_resources` import, these pins can likely be relaxed.
 
-## 5. The ADK model configuration (`config.get_adk_model()`)
+## 5. The provider switch (`LLM_PROVIDER` and `config.py`'s helper functions)
 
-The spec's setup steps only require `OPENAI_API_KEY` (§7 step 2), so by
-default `ADK_MODEL=openai/gpt-4o-mini` in `.env.example` — a
-`provider/model`-shaped string. `config.get_adk_model()` sees the `/` and
-wraps it with `google.adk.models.lite_llm.LiteLlm(model="openai/gpt-4o-mini")`,
-which routes that ADK agent's tool-calling loop through OpenAI via LiteLLM
-instead of Gemini. If you instead set `ADK_MODEL=gemini-2.0-flash` (no `/`)
-and provide `GOOGLE_API_KEY`, `get_adk_model()` passes the bare string
-straight to ADK's native Gemini client. Both ADK services call this same
-function, so switching providers is a one-line `.env` change, not a code
-change.
+This project can run its entire LLM stack on **Anthropic** (the default) or
+**OpenAI**, controlled by exactly one setting: `LLM_PROVIDER` in `.env`.
+Four functions in `config.py` read it and return the right client for each
+framework:
+
+| Function | Used by | `LLM_PROVIDER=anthropic` (default) | `LLM_PROVIDER=openai` |
+|---|---|---|---|
+| `get_chat_llm()` | LangGraph supervisor (`orchestration/graph.py`) | `ChatAnthropic(model=ANTHROPIC_MODEL)` | `ChatOpenAI(model=OPENAI_MODEL)` |
+| `get_llamaindex_llm()` | Both LlamaIndex modules (`llamaindex_rag/`) | `llama_index.llms.anthropic.Anthropic` | `llama_index.llms.openai.OpenAI` |
+| `get_crewai_model_string()` | CrewAI (`orchestration/crew_nodes.py`) | `"anthropic/{ANTHROPIC_MODEL}"` | `"openai/{OPENAI_MODEL}"` |
+| `get_adk_model()` | Both ADK services + `adk_remote_client.py` | `LiteLlm("anthropic/{ANTHROPIC_MODEL}")` | `LiteLlm("openai/{OPENAI_MODEL}")` |
+
+`get_adk_model()` reads `ADK_MODEL` specifically (not `LLM_PROVIDER`
+directly), but `ADK_MODEL`'s own default is computed *from* `LLM_PROVIDER`
+(`config._DEFAULT_ADK_MODEL`) — so leaving `ADK_MODEL` unset in `.env` means
+the ADK agents automatically follow whatever `LLM_PROVIDER` says. Any
+`provider/model`-shaped string (`"openai/..."`, `"anthropic/..."`) gets
+wrapped with `google.adk.models.lite_llm.LiteLlm` so ADK calls that provider
+instead of its native Gemini client; a bare model id like
+`gemini-2.0-flash` (no `/`) is passed straight through to Gemini instead,
+which needs `GOOGLE_API_KEY`. This means you can mix providers — e.g. run
+the supervisor/RAG/CrewAI on Claude while explicitly pinning the ADK agents
+to Gemini — by setting `ADK_MODEL` explicitly alongside `LLM_PROVIDER`.
+
+**Model choice**: `ANTHROPIC_MODEL` defaults to `claude-haiku-4-5-20251001`
+and `OPENAI_MODEL` to `gpt-4o-mini` — both fast, inexpensive models, chosen
+for the same reason: this project makes many small LLM calls per query
+(routing, tool-calling, synthesis, draft, review), so a cheap/fast model
+keeps the demo responsive and inexpensive. Set either env var to a larger
+model (e.g. `claude-sonnet-5`) if you want higher-quality answers at a
+higher per-call cost.
 
 ## 6. What was verified, and what genuinely needs your API key
 
@@ -125,7 +149,7 @@ startup):
   detection, the Submit → response → trace flow (with a mocked graph
   result), the empty-trace message, and the error path.
 
-**Not run, because it spends your real OpenAI credits**: an actual live
+**Not run, because it spends your real API credits**: an actual live
 query going all the way through — supervisor LLM routing decision →
 LlamaIndex/ADK-agent LLM calls → CrewAI's draft + review LLM calls → final
 answer. Every individual link in that chain has been verified above; the
@@ -180,14 +204,15 @@ Not required, but natural next steps if you want to go beyond the spec:
 
 ## 9. Cost awareness
 
-Once you add your key, every submitted inquiry makes multiple OpenAI API
-calls: the supervisor's routing decision (once per worker hop), the
-LlamaIndex query engine(s) invoked, the ADK agent's own tool-calling loop
-(1–3 calls per tool used), and the CrewAI draft + review (2 calls). A typical
-single-worker query (Scenario 1–4) is roughly 4–8 small `gpt-4o-mini` calls;
-the combined Scenario 5 roughly doubles that. This is inexpensive at
-`gpt-4o-mini` prices, but worth knowing if you're running the full practice
-query list in §5 of `HOW_TO_RUN.md` many times while rehearsing.
+Once you add your key, every submitted inquiry makes multiple LLM API calls
+against your configured provider: the supervisor's routing decision (once
+per worker hop), the LlamaIndex query engine(s) invoked, the ADK agent's own
+tool-calling loop (1–3 calls per tool used), and the CrewAI draft + review (2
+calls). A typical single-worker query (Scenario 1–4) is roughly 4–8 small
+model calls; the combined Scenario 5 roughly doubles that. This is
+inexpensive at Claude Haiku or `gpt-4o-mini` prices, but worth knowing if
+you're running the full practice query list in §5 of `HOW_TO_RUN.md` many
+times while rehearsing.
 
 ## 10. If your environment doesn't have this `.venv` (fresh machine)
 
