@@ -123,7 +123,7 @@ are in section 9.7 of `capstone-project-specification.html`.
 ## Verification
 
 Everything below was actually run (not just written) against the real
-libraries in `.venv`, without spending any LLM API calls:
+libraries in `.venv`. The first group needed no LLM API calls at all:
 
 - `init_db.py` builds the database; every scenario anchor from the spec
   (CUST-10002 balance/duplicate, TX-512/FL-090 latest-sample metrics, Midwest
@@ -152,10 +152,31 @@ libraries in `.venv`, without spending any LLM API calls:
   statement that Streamlit's "magic" display feature can't parse; now plain
   `if/else`).
 
-What was **not** run, since it spends real API credits you'd need to
-provide: an actual end-to-end query through the LangGraph supervisor (LLM
-routing decision → LlamaIndex/ADK/CrewAI LLM calls → final answer). Everything
-that call chain depends on has been verified individually above.
+**All 5 required scenarios were additionally run live end-to-end** (real
+Anthropic API calls, real supervisor routing, real LlamaIndex/ADK-agent/
+CrewAI LLM calls) and matched the spec's expected values exactly:
+
+- Scenario 1: PolicyRAG correctly retrieved Zone B roaming rates (Travel
+  Pass $10/day, Business $5/day, Enterprise included) → CustomerCommsCrew.
+- Scenario 2: NetworkAnalytics correctly identified Midwest with 6 CRITICAL
+  outages → CustomerCommsCrew.
+- Scenario 3: NetworkDiagnosticsADK reproduced TX-512 exactly (OPERATIONAL,
+  -72 dBm, 3.8% packet loss, 85 Mbps, open incident INC-8841) →
+  CustomerCommsCrew.
+- Scenario 4: BillingResolutionADK found the duplicate $65.99 charge and
+  correctly inserted a `PENDING_APPROVAL` credit, leaving the balance at
+  $131.98 (verified in the database after the run) → CustomerCommsCrew,
+  which correctly told the customer the credit was pending, not applied.
+- Scenario 5: NetworkAnalytics found the 6-hour Midwest outage, PolicyRAG
+  computed the exact SLA credit amounts from the policy formula ($22.50
+  Business, $62.25 Enterprise pending, Consumer not eligible) →
+  CustomerCommsCrew merged both into one coherent answer.
+
+This run also surfaced and fixed one real dependency bug: see
+`DEPENDENCIES_AND_NEXT_STEPS.md` §4 (`anthropic==0.125.0` pin) for the
+`llama-index-llms-anthropic` / Anthropic SDK 1.x incompatibility that was
+silently turning every PolicyRAG/NetworkAnalytics answer into an "Empty
+Response" until fixed.
 
 ## Design notes / how this maps to the spec's build instructions (section 6)
 

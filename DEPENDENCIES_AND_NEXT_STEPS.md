@@ -86,6 +86,21 @@ exist and don't "helpfully" loosen them:
   `pkg_resources` entirely, which broke `import crewai` outright
   (`ModuleNotFoundError: No module named 'pkg_resources'`) until this was
   pinned back.
+- **`anthropic==0.125.0`** — found by live-testing PolicyRAG with a real
+  Anthropic key: `llama-index-llms-anthropic` (0.12.2, the latest release as
+  of writing) still calls `Messages.create(temperature=...)` in the pre-1.0
+  Anthropic SDK's call shape. Anthropic's SDK crossed into a breaking 1.x
+  major version, and with an unpinned `anthropic` dependency, `pip` installs
+  1.9.0 by default, which raises `TypeError: Messages.create() got an
+  unexpected keyword argument 'temperature'` on every LlamaIndex query —
+  silently swallowed by LlamaIndex's response synthesizer into an "Empty
+  Response" rather than a visible crash. `langchain-anthropic` (used by the
+  supervisor) already supports 1.x fine, so this is specifically a
+  `llama-index-llms-anthropic` compatibility gap; pinning `anthropic` to its
+  latest 0.x release fixes both integrations at once (it satisfies
+  `langchain-anthropic`'s own `anthropic<2.0.0,>=0.120.0` constraint too).
+  If a future `llama-index-llms-anthropic` release supports the 1.x SDK,
+  this pin can be lifted.
 
 None of these pins reflect a real incompatibility with newer versions of
 *this project's own code* — they exist purely to keep `pip install` fast and
